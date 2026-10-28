@@ -3,13 +3,14 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, ShieldCheck, Eye, EyeOff } from "lucide-react";
 
 export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<"customer" | "merchant" | "captain">("customer");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -62,7 +63,7 @@ export default function SignupPage() {
           <label className="block text-sm font-bold">ناوی تەواو<input required minLength={2} maxLength={100} value={name} onChange={e=>setName(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-primary" placeholder="ناوی تەواوت"/></label>
           <label className="block text-sm font-bold">ئیمەیڵ<input required type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-primary" placeholder="you@example.com"/></label>
           <label className="block text-sm font-bold">ژمارەی مۆبایل <span className="font-normal text-text-muted">(ئارەزوومەندانە)</span><input type="tel" autoComplete="tel" value={phone} onChange={e=>setPhone(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-primary" placeholder="07xx xxx xxxx"/></label>
-          <label className="block text-sm font-bold">وشەی نهێنی<input required type="password" minLength={8} autoComplete="new-password" value={password} onChange={e=>setPassword(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-primary" placeholder="لانیکەم ٨ پیت"/></label>
+          <label className="block text-sm font-bold">وشەی نهێنی<div className="relative mt-2"><input required type={showPassword ? "text" : "password"} minLength={8} autoComplete="new-password" value={password} onChange={e=>setPassword(e.target.value)} className="w-full rounded-xl border border-border px-4 py-3 pl-12 font-normal outline-none focus:border-primary" placeholder="لانیکەم ٨ پیت"/><button type="button" aria-label={showPassword ? "شاردنەوەی وشەی نهێنی" : "پیشاندانی وشەی نهێنی"} aria-pressed={showPassword} onClick={()=>setShowPassword(value=>!value)} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-text-secondary hover:bg-surface-muted">{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></div></label>
           <fieldset><legend className="mb-2 text-sm font-bold">ڕۆڵی خۆت هەڵبژێرە</legend><div className="grid grid-cols-3 gap-2">{([{value:"customer",label:"کڕیار"},{value:"merchant",label:"دوکاندار"},{value:"captain",label:"کاپتن"}] as const).map(x=><button key={x.value} type="button" onClick={()=>setRole(x.value)} className={"rounded-xl border px-2 py-3 text-sm font-bold "+(role===x.value?"border-primary bg-secondary text-primary":"border-border text-text-secondary")}>{x.label}</button>)}</div></fieldset>
           <button disabled={busy} type="submit" className="w-full rounded-xl bg-primary px-5 py-3.5 font-bold text-white disabled:opacity-60">{busy?"چاوەڕێ بکە...":"دروستکردنی هەژمار"}</button>
           {message&&<p role="status" className="rounded-xl bg-surface-muted p-3 text-sm leading-7 text-text-secondary">{message}</p>}
