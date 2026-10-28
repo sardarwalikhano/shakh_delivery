@@ -1,4 +1,5 @@
 "use client";
+// Order management: checkout tracking, merchant preparation, captain delivery and settlement.
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
