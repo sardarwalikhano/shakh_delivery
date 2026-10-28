@@ -56,7 +56,7 @@ export default function ResetPasswordPage() {
         <label className="block text-sm font-bold">وشەی نهێنی نوێ<input required minLength={8} autoComplete="new-password" type="password" value={password} onChange={e=>setPassword(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-primary"/></label>
         <label className="block text-sm font-bold">دووبارە وشەی نهێنی بنووسە<input required minLength={8} autoComplete="new-password" type="password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-primary"/></label>
         <button disabled={!ready || busy || !!message.startsWith("بەستەری گۆڕینی")} className="w-full rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50">{busy?"چاوەڕێ بکە...":"پاشەکەوتکردنی وشەی نهێنی"}</button>
-        {message && <p role="status" className="rounded-xl bg-slate-50 p-3 text-sm leading-7 text-slate-700">{message}</p>}
+        {message && <p role="status" className="rounded-xl bg-surface-muted p-3 text-sm leading-7 text-text-secondary">{message}</p>}
       </form>
     </section>
   </main>;
