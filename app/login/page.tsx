@@ -4,11 +4,13 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
@@ -55,7 +57,7 @@ export default function LoginPage() {
       <div className="my-5 flex items-center gap-3 text-xs text-text-muted"><span className="h-px flex-1 bg-border"/><span>یان بە ئیمەیڵ</span><span className="h-px flex-1 bg-border"/></div>
       <form onSubmit={submit} className="space-y-4">
         <label className="block text-sm font-bold">ئیمەیڵ<input required type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-primary"/></label>
-        <label className="block text-sm font-bold">وشەی نهێنی<input required type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-primary"/></label>
+        <label className="block text-sm font-bold">وشەی نهێنی<div className="relative mt-2"><input required type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} className="w-full rounded-xl border border-border px-4 py-3 pl-12 font-normal outline-none focus:border-primary"/><button type="button" aria-label={showPassword ? "شاردنەوەی وشەی نهێنی" : "پیشاندانی وشەی نهێنی"} aria-pressed={showPassword} onClick={()=>setShowPassword(value=>!value)} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-text-secondary hover:bg-surface-muted">{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></div></label>
         <button disabled={busy} className="w-full rounded-xl bg-primary px-5 py-3.5 font-bold text-white disabled:opacity-60">{busy?"چاوەڕێ بکە...":"چوونەژوورەوە"}</button>
         <button type="button" disabled={resetBusy} onClick={()=>void sendPasswordReset()} className="w-full text-sm font-bold text-primary underline disabled:opacity-50">{resetBusy?"ناردن...":"وشەی نهێنیت لەبیرچووە؟ بەستەری نوێکردنەوە بنێرە"}</button>
         {message && <p role="status" className="rounded-xl bg-surface-muted p-3 text-sm leading-6 text-text-secondary">{message}</p>}
