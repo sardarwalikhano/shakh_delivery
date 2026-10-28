@@ -55,6 +55,7 @@ export default function SignupPage() {
           <button disabled={busy} type="submit" className="w-full rounded-xl bg-[#1d6b38] px-5 py-3.5 font-bold text-white disabled:opacity-60">{busy?"چاوەڕێ بکە...":"دروستکردنی هەژمار"}</button>
           {message&&<p role="status" className="rounded-xl bg-slate-50 p-3 text-sm leading-7 text-slate-700">{message}</p>}
         </form>
+        <p className="mt-5 text-sm text-slate-600">پێشتر هەژمارت هەیە؟ <Link href="/login" className="font-bold text-green-800">چوونەژوورەوە</Link></p>
       </section>
     </div>
   </main>;
