@@ -13,6 +13,16 @@ export default function SignupPage() {
   const [role, setRole] = useState<"customer" | "merchant" | "captain">("customer");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
+
+  async function signUpWithGoogle() {
+    setGoogleBusy(true); setMessage("");
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/dashboard` } });
+      if (error) throw error;
+    } catch (error) { setMessage(error instanceof Error ? error.message : "دروستکردنی هەژمار بە گووگڵ سەرکەوتوو نەبوو."); setGoogleBusy(false); }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -46,7 +56,9 @@ export default function SignupPage() {
         <Link href="/" className="inline-flex items-center gap-2 text-sm font-bold text-green-800"><ArrowRight size={16}/> گەڕانەوە بۆ بازاڕ</Link>
         <h2 className="mt-6 text-2xl font-black">دروستکردنی هەژمار</h2>
         <p className="mt-2 text-sm text-slate-500">زانیارییەکانت پڕ بکەرەوە.</p>
-        <form onSubmit={submit} className="mt-6 space-y-4">
+        <button type="button" onClick={()=>void signUpWithGoogle()} disabled={googleBusy} className="mt-6 flex w-full items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-5 py-3.5 font-bold text-slate-800 transition hover:bg-slate-50 disabled:opacity-60"><span className="text-xl font-black">G</span>{googleBusy?"چاوەڕێ بکە...":"بەردەوامبوون بە گووگڵ"}</button>
+        <div className="my-5 flex items-center gap-3 text-xs text-slate-400"><span className="h-px flex-1 bg-slate-200"/><span>یان بە ئیمەیڵ</span><span className="h-px flex-1 bg-slate-200"/></div>
+        <form onSubmit={submit} className="space-y-4">
           <label className="block text-sm font-bold">ناوی تەواو<input required minLength={2} maxLength={100} value={name} onChange={e=>setName(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-green-700" placeholder="ناوی تەواوت"/></label>
           <label className="block text-sm font-bold">ئیمەیڵ<input required type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-green-700" placeholder="you@example.com"/></label>
           <label className="block text-sm font-bold">ژمارەی مۆبایل <span className="font-normal text-slate-400">(ئارەزوومەندانە)</span><input type="tel" autoComplete="tel" value={phone} onChange={e=>setPhone(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-green-700" placeholder="07xx xxx xxxx"/></label>
