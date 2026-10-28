@@ -20,6 +20,7 @@ export default function SignupPage() {
     setGoogleBusy(true); setMessage("");
     try {
       const supabase = createSupabaseBrowserClient();
+      window.sessionStorage.setItem("shakh_google_signup_role", JSON.stringify({ role, at: Date.now() }));
       const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/dashboard` } });
       if (error) throw error;
     } catch (error) { setMessage(error instanceof Error ? error.message : "دروستکردنی هەژمار بە گووگڵ سەرکەوتوو نەبوو."); setGoogleBusy(false); }
