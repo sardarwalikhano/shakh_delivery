@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setMessage("");
@@ -24,6 +25,18 @@ export default function LoginPage() {
     } finally { setBusy(false); }
   }
 
+  async function sendPasswordReset() {
+    if (!email.trim()) { setMessage("سەرەتا ئیمەیڵەکەت بنووسە، پاشان دووبارە کلیک بکە."); return; }
+    setResetBusy(true); setMessage("");
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/reset-password` });
+      if (error) throw error;
+      setMessage("ئەگەر ئەم ئیمەیڵە لە سیستەمدا هەبێت، بەستەری گۆڕینی وشەی نهێنی بۆی نێردرا. تکایە Inbox و Spam بپشکنە.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "ناردنی بەستەری گۆڕینی وشەی نهێنی سەرکەوتوو نەبوو."); }
+    finally { setResetBusy(false); }
+  }
+
   return <main dir="rtl" className="min-h-screen bg-[#f8faf7] px-4 py-12">
     <div className="mx-auto max-w-md rounded-3xl border border-green-950/10 bg-white p-7 shadow-sm sm:p-10">
       <Link href="/" className="text-sm font-bold text-green-800">← گەڕانەوە بۆ بازاڕ</Link>
@@ -32,7 +45,8 @@ export default function LoginPage() {
         <label className="block text-sm font-bold">ئیمەیڵ<input required type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-green-700"/></label>
         <label className="block text-sm font-bold">وشەی نهێنی<input required type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-green-700"/></label>
         <button disabled={busy} className="w-full rounded-xl bg-[#1d6b38] px-5 py-3.5 font-bold text-white disabled:opacity-60">{busy?"چاوەڕێ بکە...":"چوونەژوورەوە"}</button>
-        {message && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm leading-6 text-red-800">{message}</p>}
+        <button type="button" disabled={resetBusy} onClick={()=>void sendPasswordReset()} className="w-full text-sm font-bold text-green-800 underline disabled:opacity-50">{resetBusy?"ناردن...":"وشەی نهێنیت لەبیرچووە؟ بەستەری نوێکردنەوە بنێرە"}</button>
+        {message && <p role="status" className="rounded-xl bg-slate-50 p-3 text-sm leading-6 text-slate-700">{message}</p>}
       </form>
       <p className="mt-5 text-sm text-slate-600">هەژمارت نییە؟ <Link href="/signup" className="font-bold text-green-800">هەژمار دروست بکە</Link></p>
     </div>
