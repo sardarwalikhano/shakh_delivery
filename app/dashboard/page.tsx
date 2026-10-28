@@ -25,6 +25,24 @@ export default function DashboardPage() {
     const supabase = createSupabaseBrowserClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) { router.replace("/login"); return; }
+    try {
+      const pendingRole = window.sessionStorage.getItem("shakh_google_signup_role");
+      if (pendingRole) {
+        window.sessionStorage.removeItem("shakh_google_signup_role");
+        const parsed: unknown = JSON.parse(pendingRole);
+        if (parsed && typeof parsed === "object" && "role" in parsed && "at" in parsed) {
+          const roleData = parsed as { role?: unknown; at?: unknown };
+          const validRole = roleData.role === "customer" || roleData.role === "merchant" || roleData.role === "captain";
+          const recent = typeof roleData.at === "number" && Date.now() - roleData.at < 600000 && Date.now() >= roleData.at;
+          if (validRole && recent) {
+            const { error: roleError } = await supabase.from("profiles").update({ requested_role: roleData.role }).eq("id", user.id).eq("approved_role", "customer");
+            if (roleError) setMessage("هەژمارەکەت چووەتە ژوورەوە، بەڵام داواکاریی ڕۆڵی هەڵبژێردراو پاشەکەوت نەکرا.");
+          }
+        }
+      }
+    } catch {
+      window.sessionStorage.removeItem("shakh_google_signup_role");
+    }
     const { data: me, error } = await supabase.from("profiles").select("id,display_name,phone,requested_role,approved_role,created_at").eq("id", user.id).single();
     if (error) { setMessage("نەتوانرا زانیاری هەژمار بخوێندرێتەوە. دڵنیابە migration و Supabase env ڕێکن."); setLoading(false); return; }
     setProfile(me as Profile);
