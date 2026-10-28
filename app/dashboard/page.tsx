@@ -1,117 +1,156 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Activity, ArrowDownToLine, BadgeCheck, Boxes, ClipboardList, CreditCard, LayoutDashboard, LogOut, Plus, RefreshCw, ShieldCheck, Store, UserRound, Wallet } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
-type Profile = { id: string; display_name: string; phone: string | null; requested_role: string; approved_role: string; created_at: string };
-type Wallet = { id: string; owner_type: string; balance_iqd: number };
-const roleLabel: Record<string,string> = { customer:"کڕیار", merchant:"دوکاندار", captain:"کاپتن", admin:"ئەدمین", super_admin:"سوپەر ئەدمین" };
+type Profile = { id:string; display_name:string; phone:string|null; requested_role:string; approved_role:string; created_at:string };
+type WalletRow = { id:string; owner_type:string; balance_iqd:number };
+type StoreRow = { id:string; owner_id:string; name:string; category:string; is_approved:boolean; created_at:string };
+type ProductRow = { id:string; store_id:string; name:string; price_iqd:number; share_reward_iqd:number; merchant_commission_iqd:number; share_reward_enabled:boolean; is_available:boolean };
+type TopupRow = { id:string; wallet_id:string; requested_by:string; amount_iqd:number; status:string; created_at:string; wallets?:{owner_id:string;owner_type:string}|null };
+type OrderRow = { id:string; customer_id:string; store_id:string; captain_id:string|null; status:string; subtotal_iqd:number; delivery_fee_iqd:number; created_at:string };
+type Tab = "overview"|"profile"|"stores"|"products"|"wallet"|"orders"|"admin";
+const roleLabel:Record<string,string>={customer:"کڕیار",merchant:"دوکاندار",captain:"کاپتن",admin:"ئەدمین",super_admin:"سوپەر ئەدمین"};
+const categoryLabel:Record<string,string>={restaurant:"چێشتخانە",grocery:"سوپەرمارکێت",produce:"سەوزە و میوە"};
+const statusLabel:Record<string,string>={pending:"چاوەڕوان",approved:"پەسەندکرا",rejected:"ڕەتکراوەتەوە",preparing:"ئامادەکردن",delivering:"لە ڕێگادایە",completed:"تەواوبوو",cancelled:"هەڵوەشێنراوەتەوە"};
+const money=(v:number)=>new Intl.NumberFormat("en-US").format(Number(v)||0)+" د.ع";
+const panel="rounded-2xl border border-border bg-surface p-5 shadow-card";
+const field="mt-2 w-full rounded-xl border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-primary";
 
-export default function DashboardPage() {
-  const router = useRouter();
-  const [profile, setProfile] = useState<Profile|null>(null);
-  const [pending, setPending] = useState<Profile[]>([]);
-  const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [message, setMessage] = useState("");
-  const [busyId, setBusyId] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [editName, setEditName] = useState("");
-  const [editPhone, setEditPhone] = useState("");
-  const [savingProfile, setSavingProfile] = useState(false);
+export default function DashboardPage(){
+ const router=useRouter();
+ const [profile,setProfile]=useState<Profile|null>(null);
+ const [wallets,setWallets]=useState<WalletRow[]>([]);
+ const [stores,setStores]=useState<StoreRow[]>([]);
+ const [products,setProducts]=useState<ProductRow[]>([]);
+ const [topups,setTopups]=useState<TopupRow[]>([]);
+ const [orders,setOrders]=useState<OrderRow[]>([]);
+ const [pendingRoles,setPendingRoles]=useState<Profile[]>([]);
+ const [pendingStores,setPendingStores]=useState<StoreRow[]>([]);
+ const [tab,setTab]=useState<Tab>("overview");
+ const [message,setMessage]=useState("");
+ const [loading,setLoading]=useState(true);
+ const [busy,setBusy]=useState(false);
+ const [busyId,setBusyId]=useState("");
+ const [editName,setEditName]=useState("");
+ const [editPhone,setEditPhone]=useState("");
+ const [storeName,setStoreName]=useState("");
+ const [storeCategory,setStoreCategory]=useState("restaurant");
+ const [productStore,setProductStore]=useState("");
+ const [productName,setProductName]=useState("");
+ const [productPrice,setProductPrice]=useState("");
+ const [productCommission,setProductCommission]=useState("0");
+ const [productReward,setProductReward]=useState("0");
+ const [rewardEnabled,setRewardEnabled]=useState(false);
+ const [topupWallet,setTopupWallet]=useState("");
+ const [topupAmount,setTopupAmount]=useState("5000");
 
-  const load = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) { router.replace("/login"); return; }
-    try {
-      const pendingRole = window.sessionStorage.getItem("shakh_google_signup_role");
-      if (pendingRole) {
-        window.sessionStorage.removeItem("shakh_google_signup_role");
-        const parsed: unknown = JSON.parse(pendingRole);
-        if (parsed && typeof parsed === "object" && "role" in parsed && "at" in parsed) {
-          const roleData = parsed as { role?: unknown; at?: unknown };
-          const validRole = roleData.role === "customer" || roleData.role === "merchant" || roleData.role === "captain";
-          const recent = typeof roleData.at === "number" && Date.now() - roleData.at < 600000 && Date.now() >= roleData.at;
-          if (validRole && recent) {
-            const { error: roleError } = await supabase.from("profiles").update({ requested_role: roleData.role }).eq("id", user.id).eq("approved_role", "customer");
-            if (roleError) setMessage("هەژمارەکەت چووەتە ژوورەوە، بەڵام داواکاریی ڕۆڵی هەڵبژێردراو پاشەکەوت نەکرا.");
-          }
-        }
-      }
-    } catch {
-      window.sessionStorage.removeItem("shakh_google_signup_role");
+ const load=useCallback(async()=>{
+  setLoading(true);
+  const supabase=createSupabaseBrowserClient();
+  const {data:{user},error:authError}=await supabase.auth.getUser();
+  if(authError||!user){router.replace("/login");return;}
+  try{
+   const pendingRole=window.sessionStorage.getItem("shakh_google_signup_role");
+   if(pendingRole){
+    window.sessionStorage.removeItem("shakh_google_signup_role");
+    const parsed:unknown=JSON.parse(pendingRole);
+    if(parsed&&typeof parsed==="object"&&"role" in parsed&&"at" in parsed){
+     const x=parsed as {role?:unknown;at?:unknown};
+     if((x.role==="customer"||x.role==="merchant"||x.role==="captain")&&typeof x.at==="number"&&Date.now()-x.at<600000&&Date.now()>=x.at){
+      const {error}=await supabase.from("profiles").update({requested_role:x.role}).eq("id",user.id).eq("approved_role","customer");
+      if(error)setMessage("داواکاریی ڕۆڵ پاشەکەوت نەکرا. تکایە دووبارە هەوڵ بدە.");
+     }
     }
-    const { data: me, error } = await supabase.from("profiles").select("id,display_name,phone,requested_role,approved_role,created_at").eq("id", user.id).single();
-    if (error) { setMessage("نەتوانرا زانیاری هەژمار بخوێندرێتەوە. دڵنیابە migration و Supabase env ڕێکن."); setLoading(false); return; }
-    setProfile(me as Profile);
-    setEditName(me.display_name ?? "");
-    setEditPhone(me.phone ?? "");
-    const { data: walletData } = await supabase.from("wallets").select("id,owner_type,balance_iqd").eq("owner_id", user.id);
-    setWallets((walletData ?? []) as Wallet[]);
-    if (["admin","super_admin"].includes(me.approved_role)) {
-      const { data: requests, error: reqError } = await supabase.from("profiles").select("id,display_name,phone,requested_role,approved_role,created_at").in("requested_role", ["merchant","captain"]).neq("approved_role", "merchant").neq("approved_role", "captain").order("created_at", { ascending: true });
-      if (reqError) setMessage("نەتوانرا داواکارییەکان باربکرێن.");
-      setPending((requests ?? []) as Profile[]);
-    }
-    setLoading(false);
-  }, [router]);
+   }
+  }catch{window.sessionStorage.removeItem("shakh_google_signup_role");}
+  const {data:me,error}=await supabase.from("profiles").select("id,display_name,phone,requested_role,approved_role,created_at").eq("id",user.id).single();
+  if(error||!me){setMessage("نەتوانرا زانیاری هەژمار بخوێندرێتەوە.");setLoading(false);return;}
+  const p=me as Profile;setProfile(p);setEditName(p.display_name||"");setEditPhone(p.phone||"");
+  const admin=["admin","super_admin"].includes(p.approved_role);
+  const [w,s,t,o,rr,ps]=await Promise.all([
+   supabase.from("wallets").select("id,owner_type,balance_iqd").eq("owner_id",user.id),
+   admin?supabase.from("stores").select("id,owner_id,name,category,is_approved,created_at").order("created_at",{ascending:false}):supabase.from("stores").select("id,owner_id,name,category,is_approved,created_at").eq("owner_id",user.id).order("created_at",{ascending:false}),
+   admin?supabase.from("wallet_topup_requests").select("id,wallet_id,requested_by,amount_iqd,status,created_at,wallets(owner_id,owner_type)").order("created_at",{ascending:false}):supabase.from("wallet_topup_requests").select("id,wallet_id,requested_by,amount_iqd,status,created_at").eq("requested_by",user.id).order("created_at",{ascending:false}),
+   admin?supabase.from("orders").select("id,customer_id,store_id,captain_id,status,subtotal_iqd,delivery_fee_iqd,created_at").order("created_at",{ascending:false}).limit(100):p.approved_role==="captain"?supabase.from("orders").select("id,customer_id,store_id,captain_id,status,subtotal_iqd,delivery_fee_iqd,created_at").eq("captain_id",user.id).order("created_at",{ascending:false}).limit(100):supabase.from("orders").select("id,customer_id,store_id,captain_id,status,subtotal_iqd,delivery_fee_iqd,created_at").eq("customer_id",user.id).order("created_at",{ascending:false}).limit(100),
+   admin?supabase.from("profiles").select("id,display_name,phone,requested_role,approved_role,created_at").in("requested_role",["merchant","captain"]).neq("approved_role","merchant").neq("approved_role","captain").order("created_at",{ascending:true}):Promise.resolve({data:[],error:null}),
+   admin?supabase.from("stores").select("id,owner_id,name,category,is_approved,created_at").eq("is_approved",false).order("created_at",{ascending:true}):Promise.resolve({data:[],error:null})
+  ]);
+  setWallets((w.data||[]) as WalletRow[]);setStores((s.data||[]) as StoreRow[]);setTopups((t.data||[]) as unknown as TopupRow[]);setOrders((o.data||[]) as OrderRow[]);setPendingRoles((rr.data||[]) as Profile[]);setPendingStores((ps.data||[]) as StoreRow[]);
+  const storeIds=((s.data||[]) as StoreRow[]).filter(x=>x.owner_id===user.id).map(x=>x.id);
+  if(admin){const {data:all}=await supabase.from("products").select("id,store_id,name,price_iqd,share_reward_iqd,merchant_commission_iqd,share_reward_enabled,is_available").order("name");setProducts((all||[]) as ProductRow[]);}
+  else if(storeIds.length){const {data:owned}=await supabase.from("products").select("id,store_id,name,price_iqd,share_reward_iqd,merchant_commission_iqd,share_reward_enabled,is_available").in("store_id",storeIds).order("name");setProducts((owned||[]) as ProductRow[]);}
+  else setProducts([]);
+  setProductStore(current=>current||storeIds[0]||"");
+  setTopupWallet(current=>current||((w.data||[]) as WalletRow[])[0]?.id||"");
+  setLoading(false);
+ },[router]);
 
-  useEffect(() => { void load(); }, [load]);
+ useEffect(()=>{void load();},[load]);
+ const isAdmin=!!profile&&["admin","super_admin"].includes(profile.approved_role);
+ const isMerchant=profile?.approved_role==="merchant";
+ const isWorker=isMerchant||profile?.approved_role==="captain";
+ const totalWallet=wallets.reduce((sum,w)=>sum+Number(w.balance_iqd),0);
+ const pendingTopups=topups.filter(t=>t.status==="pending");
+ const tabs=useMemo(()=>[
+  {id:"overview" as Tab,label:"پوختە",icon:LayoutDashboard},
+  {id:"profile" as Tab,label:"هەژمار",icon:UserRound},
+  ...(isMerchant?[{id:"stores" as Tab,label:"دوکان",icon:Store},{id:"products" as Tab,label:"بەرهەم",icon:Boxes}]:[]),
+  ...(isWorker?[{id:"wallet" as Tab,label:"جزدان",icon:Wallet}]:[]),
+  {id:"orders" as Tab,label:"داواکاری",icon:ClipboardList},
+  ...(isAdmin?[{id:"admin" as Tab,label:"بەڕێوەبردن",icon:ShieldCheck}]:[])
+ ],[isAdmin,isMerchant,isWorker]);
 
-  async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setSavingProfile(true); setMessage("");
-    try {
-      const supabase = createSupabaseBrowserClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("تکایە دووبارە بچۆ ژوورەوە.");
-      const cleanName = editName.trim();
-      if (cleanName.length < 2) throw new Error("ناو دەبێت لانیکەم ٢ پیت بێت.");
-      const { error } = await supabase.from("profiles").update({ display_name: cleanName, phone: editPhone.trim() || null }).eq("id", user.id);
-      if (error) throw error;
-      setProfile(current => current ? { ...current, display_name: cleanName, phone: editPhone.trim() || null } : current);
-      setMessage("زانیاری هەژمارەکەت نوێ کرایەوە.");
-    } catch (e) { setMessage(e instanceof Error ? e.message : "نوێکردنەوەی زانیاری سەرکەوتوو نەبوو."); }
-    finally { setSavingProfile(false); }
-  }
+ async function saveProfile(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setMessage("");try{const sb=createSupabaseBrowserClient();const {data:{user}}=await sb.auth.getUser();if(!user)throw new Error("دووبارە بچۆ ژوورەوە.");const name=editName.trim();if(name.length<2)throw new Error("ناو لانیکەم ٢ پیت بێت.");const {error}=await sb.from("profiles").update({display_name:name,phone:editPhone.trim()||null}).eq("id",user.id);if(error)throw error;setMessage("زانیاری هەژمار نوێ کرایەوە.");await load();}catch(e){setMessage(e instanceof Error?e.message:"هەڵەی نوێکردنەوە.");}finally{setBusy(false);}}
+ async function createStore(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setMessage("");try{const sb=createSupabaseBrowserClient();const {data:{user}}=await sb.auth.getUser();if(!user)throw new Error("چوونەژوورەوە پێویستە.");const name=storeName.trim();if(name.length<2)throw new Error("ناوی دوکان زۆر کورتە.");const {error}=await sb.from("stores").insert({owner_id:user.id,name,category:storeCategory,is_approved:false});if(error)throw error;setStoreName("");setMessage("دوکان تۆمار کرا و چاوەڕێی پەسەندکردنی سوپەر ئەدمینە.");await load();}catch(e){setMessage(e instanceof Error?e.message:"دروستکردنی دوکان سەرکەوتوو نەبوو.");}finally{setBusy(false);}}
+ async function createProduct(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setMessage("");try{const price=Number(productPrice),commission=Number(productCommission),reward=Number(productReward);if(!productStore)throw new Error("سەرەتا دوکانێک دروست بکە.");if(productName.trim().length<2)throw new Error("ناوی بەرهەم لانیکەم ٢ پیت بێت.");if(!Number.isSafeInteger(price)||price<1||!Number.isSafeInteger(commission)||commission<0||!Number.isSafeInteger(reward)||reward<0)throw new Error("نرخ و کۆمسیۆن دەبێت ژمارەی دروست و نەنەرێنی بن.");const sb=createSupabaseBrowserClient();const {error}=await sb.from("products").insert({store_id:productStore,name:productName.trim(),price_iqd:price,merchant_commission_iqd:commission,share_reward_iqd:reward,share_reward_enabled:rewardEnabled,is_available:true});if(error)throw error;setProductName("");setProductPrice("");setMessage("بەرهەم زیاد کرا.");await load();}catch(e){setMessage(e instanceof Error?e.message:"زیادکردنی بەرهەم سەرکەوتوو نەبوو.");}finally{setBusy(false);}}
+ async function requestTopup(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setMessage("");try{const amount=Number(topupAmount);if(!topupWallet||!Number.isSafeInteger(amount)||amount<1000)throw new Error("جزدان هەڵبژێرە و بڕی کەمتر لە ١٠٠٠ مەنووسە.");const sb=createSupabaseBrowserClient();const {data:{user}}=await sb.auth.getUser();if(!user)throw new Error("چوونەژوورەوە پێویستە.");const {error}=await sb.from("wallet_topup_requests").insert({wallet_id:topupWallet,requested_by:user.id,amount_iqd:amount,status:"pending"});if(error)throw error;setMessage("داواکاریی زیادکردنی باڵانس نێردرا بۆ سوپەر ئەدمین.");await load();}catch(e){setMessage(e instanceof Error?e.message:"ناردنی داواکاری سەرکەوتوو نەبوو.");}finally{setBusy(false);}}
+ async function reviewRole(id:string,approve:boolean){setBusyId(id);setMessage("");try{const sb=createSupabaseBrowserClient();const {error}=await sb.rpc("review_role_request",{target_user_id:id,approve});if(error)throw error;setMessage(approve?"ڕۆڵ پەسەند کرا و جزدان دروست کرا.":"داواکاریی ڕۆڵ ڕەتکرایەوە.");await load();}catch(e){setMessage(e instanceof Error?e.message:"کردارەکە سەرکەوتوو نەبوو.");}finally{setBusyId("");}}
+ async function reviewTopup(id:string,approve:boolean){setBusyId(id);setMessage("");try{const sb=createSupabaseBrowserClient();const {error}=await sb.rpc("review_wallet_topup",{target_request_id:id,approve});if(error)throw error;setMessage(approve?"داواکاری پەسەند کرا و باڵانس بە شێوەی پارێزراو زیاد کرا.":"داواکاری ڕەتکرایەوە.");await load();}catch(e){setMessage(e instanceof Error?e.message:"پشکنینی داواکاری سەرکەوتوو نەبوو.");}finally{setBusyId("");}}
+ async function reviewStore(id:string,approve:boolean){setBusyId(id);setMessage("");try{const sb=createSupabaseBrowserClient();const {error}=await sb.rpc("review_store",{target_store_id:id,approve});if(error)throw error;setMessage(approve?"دوکان پەسەند کرا.":"پەسەندنەکردنی دوکان تۆمار کرا.");await load();}catch(e){setMessage(e instanceof Error?e.message:"پشکنینی دوکان سەرکەوتوو نەبوو.");}finally{setBusyId("");}}
+ async function signOut(){const sb=createSupabaseBrowserClient();await sb.auth.signOut();router.replace("/login");router.refresh();}
 
-  async function signOut() {
-    const supabase = createSupabaseBrowserClient();
-    await supabase.auth.signOut(); router.replace("/login"); router.refresh();
-  }
-  async function review(id: string, approve: boolean) {
-    setBusyId(id); setMessage("");
-    try {
-      const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.rpc("review_role_request", { target_user_id: id, approve });
-      if (error) throw error;
-      setMessage(approve ? "ڕۆڵەکە پەسەند کرا و جزدانی بۆ دروست کرا." : "داواکارییەکە ڕەتکرایەوە.");
-      await load();
-    } catch (e) { setMessage(e instanceof Error ? e.message : "کردارەکە سەرکەوتوو نەبوو."); }
-    finally { setBusyId(""); }
-  }
-
-  if (loading) return <main dir="rtl" className="min-h-screen bg-background p-8">داشبۆرد بار دەکرێت...</main>;
-  return <main dir="rtl" className="min-h-screen bg-background px-4 py-8 sm:px-8">
-    <div className="mx-auto max-w-6xl">
-      <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-primary p-6 text-white sm:p-8">
-        <div><h1 className="mt-2 text-3xl font-black">داشبۆرد</h1><p className="mt-2 text-white/75">{profile?.display_name || "بەکارهێنەر"} · {roleLabel[profile?.approved_role ?? ""] ?? "ڕۆڵی نەناسراو"}</p></div>
-        <div className="flex flex-wrap items-center gap-2"><Link href="/" className="rounded-xl bg-surface px-4 py-2 font-bold text-primary">چوون بۆ بازاڕ</Link><button onClick={signOut} className="rounded-xl border border-white/30 px-4 py-2 font-bold">دەرچوون</button></div>
-      </header>
-      {message && <p role="status" className="mt-4 rounded-xl bg-surface p-4 text-sm leading-7 text-text-secondary shadow-sm">{message}</p>}
-      <section className="mt-6 rounded-2xl border bg-surface p-5 sm:p-6"><h2 className="text-xl font-black">زانیاری هەژمار</h2><p className="mt-1 text-sm text-text-secondary">ناو و ژمارەی مۆبایلەکەت لێرە نوێ بکەرەوە. ڕۆڵ و دەسەڵات لەم بەشەوە ناگۆڕدرێت.</p><form onSubmit={saveProfile} className="mt-4 grid gap-4 sm:grid-cols-2"><label className="block text-sm font-bold">ناوی تەواو<input required minLength={2} maxLength={100} value={editName} onChange={e=>setEditName(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-primary"/></label><label className="block text-sm font-bold">ژمارەی مۆبایل<input type="tel" maxLength={30} value={editPhone} onChange={e=>setEditPhone(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-primary"/></label><div className="flex flex-wrap items-center gap-3 sm:col-span-2"><button disabled={savingProfile} className="rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50">{savingProfile?"چاوەڕێ بکە...":"پاشەکەوتکردنی گۆڕانکاری"}</button><Link href="/reset-password" className="rounded-xl border px-5 py-3 text-sm font-bold text-primary">گۆڕینی وشەی نهێنی</Link></div></form></section>
-      <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <article className="rounded-2xl border bg-surface p-5"><p className="text-sm text-text-secondary">دۆخی هەژمار</p><h2 className="mt-2 text-xl font-black">{roleLabel[profile?.approved_role ?? ""]}</h2><p className="mt-2 text-sm text-text-secondary">ڕۆڵی داواکراو: {roleLabel[profile?.requested_role ?? ""]}</p></article>
-        {wallets.map(w=><article key={w.id} className="rounded-2xl border bg-surface p-5"><p className="text-sm text-text-secondary">جزدان · {roleLabel[w.owner_type] ?? w.owner_type}</p><h2 className="mt-2 text-2xl font-black">{Number(w.balance_iqd).toLocaleString("en-US")} د.ع</h2><p className="mt-2 text-sm text-text-secondary">بڕی جزدان بە داتابەیسەوە پەیوەستە.</p></article>)}
-      </section>
-      {profile?.requested_role !== "customer" && profile?.approved_role === "customer" && <section className="mt-6 rounded-2xl border border-warning/30 bg-surface-muted p-5"><h2 className="font-black">چاوەڕێی پەسەندکردن</h2><p className="mt-2 text-sm leading-7">داواکاریی {roleLabel[profile?.requested_role ?? ""]} هێشتا پەسەند نەکراوە. تا پەسەندکردن، دەسەڵاتی ئەو ڕۆڵەت نییە.</p></section>}
-      {profile && ["admin","super_admin"].includes(profile.approved_role) && <section className="mt-8"><div className="mb-4"><h2 className="text-2xl font-black">پەسەندکردنی هەژمارەکان</h2><p className="mt-1 text-sm text-text-secondary">تەنها داواکاریی دوکاندار و کاپتن پیشان دەدرێت.</p></div>
-        {pending.length===0 ? <div className="rounded-2xl border bg-surface p-6 text-text-secondary">هیچ داواکارییەکی چاوەڕوان نییە.</div> : <div className="space-y-3">{pending.map(p=><article key={p.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-surface p-5"><div><h3 className="font-black">{p.display_name || "بەکارهێنەر"}</h3><p className="mt-1 text-sm text-text-secondary">{roleLabel[p.requested_role] ?? p.requested_role} · {p.phone || "ژمارەی مۆبایل نییە"}</p><p className="mt-1 text-xs text-text-muted">{new Date(p.created_at).toLocaleDateString("ckb")}</p></div><div className="flex gap-2"><button disabled={!!busyId} onClick={()=>void review(p.id,true)} className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busyId===p.id?"...":"پەسەندکردن"}</button><button disabled={!!busyId} onClick={()=>void review(p.id,false)} className="rounded-xl border border-danger/30 px-4 py-2 text-sm font-bold text-danger disabled:opacity-50">ڕەتکردنەوە</button></div></article>)}</div>}
-      </section>}
-      {profile?.approved_role === "merchant" && <section className="mt-8 rounded-2xl border bg-surface p-6"><h2 className="text-xl font-black">بەڕێوەبردنی دوکان</h2><p className="mt-2 text-sm leading-7 text-text-secondary">هەژمارەکەت پەسەند کراوە. زیادکردنی دوکان، بەرهەم، کۆمسیۆن و پاداشتی هاوبەشکردن قۆناغی داهاتوویە؛ هێشتا لەم داشبۆردەدا چالاک نەکراون.</p></section>}
-      {profile?.approved_role === "captain" && <section className="mt-8 rounded-2xl border bg-surface p-6"><h2 className="text-xl font-black">داشبۆردی کاپتن</h2><p className="mt-2 text-sm leading-7 text-text-secondary">جزدان و ڕۆڵەکەت لێرە پیشان دەدرێت. وەرگرتنی گەیاندن و حیساباتی کۆمسیۆن پێویستی بە قۆناغی جیاواز هەیە.</p></section>}
-      {profile?.approved_role === "customer" && <section className="mt-8 rounded-2xl border bg-surface p-6"><h2 className="text-xl font-black">داشبۆردی کڕیار</h2><p className="mt-2 text-sm leading-7 text-text-secondary">بەخێربێیت. بەشی داواکارییەکان و بەدواداچوونی گەیاندن لە قۆناغی داهاتوودا زیاد دەکرێت.</p><Link href="/" className="mt-4 inline-block rounded-xl bg-primary px-4 py-2 font-bold text-white">چوون بۆ بازاڕ</Link></section>}
-    </div>
-  </main>;
+ if(loading)return <main dir="rtl" className="min-h-screen bg-background p-8 text-text-primary">داشبۆرد بار دەکرێت...</main>;
+ const selectedTab=(id:Tab)=>setTab(id);
+ return <main dir="rtl" className="min-h-screen bg-background pb-28 text-text-primary md:pb-10">
+  <div className="mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-8">
+   <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-primary p-5 text-white sm:p-8">
+    <div className="flex items-center gap-3"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15"><LayoutDashboard size={24}/></span><div><h1 className="text-2xl font-black sm:text-3xl">داشبۆرد</h1><p className="mt-1 text-sm text-white/80">{profile?.display_name||"بەکارهێنەر"} · {roleLabel[profile?.approved_role||""]}</p></div></div>
+    <div className="flex flex-wrap gap-2"><Link href="/" className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-primary">بازاڕ</Link><button onClick={()=>void load()} aria-label="نوێکردنەوە" className="rounded-xl border border-white/30 p-2"><RefreshCw size={18}/></button><button onClick={()=>void signOut()} className="flex items-center gap-2 rounded-xl border border-white/30 px-3 py-2 text-sm font-bold"><LogOut size={16}/> دەرچوون</button></div>
+   </header>
+   {message&&<div role="status" className="mt-4 rounded-xl border border-border bg-surface p-4 text-sm leading-7">{message}</div>}
+   <div className="mt-5 grid gap-5 lg:grid-cols-[230px_minmax(0,1fr)]">
+    <aside className="hidden self-start rounded-2xl border border-border bg-surface p-3 lg:block"><p className="px-3 py-2 text-xs font-bold text-text-muted">بەشی هەژمار</p>{tabs.map(item=><button key={item.id} onClick={()=>selectedTab(item.id)} className={"mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-right text-sm font-bold "+(tab===item.id?"bg-secondary text-primary":"text-text-secondary hover:bg-surface-muted")}><item.icon size={18}/>{item.label}</button>)}<div className="mt-4 border-t border-border px-3 pt-4 text-xs leading-6 text-text-muted">شاخ دێلڤەری<br/>بەڕێوەبردنی هەژمار و خزمەتگوزارییەکان</div></aside>
+    <section className="min-w-0">
+     <div className="mb-4 flex gap-2 overflow-x-auto pb-1 lg:hidden">{tabs.map(item=><button key={item.id} onClick={()=>selectedTab(item.id)} className={"flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold "+(tab===item.id?"border-primary bg-primary text-white":"border-border bg-surface text-text-secondary")}><item.icon size={16}/>{item.label}</button>)}</div>
+     {tab==="overview"&&<div className="space-y-5"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+       <article className={panel}><p className="text-sm text-text-secondary">ڕۆڵی هەژمار</p><h2 className="mt-2 text-xl font-black">{roleLabel[profile?.approved_role||""]}</h2><p className="mt-2 text-xs text-text-muted">داواکراو: {roleLabel[profile?.requested_role||""]}</p></article>
+       <article className={panel}><p className="text-sm text-text-secondary">کۆی باڵانسی جزدان</p><h2 className="mt-2 text-xl font-black">{money(totalWallet)}</h2><p className="mt-2 text-xs text-text-muted">{wallets.length} جزدان</p></article>
+       <article className={panel}><p className="text-sm text-text-secondary">دوکانەکانم</p><h2 className="mt-2 text-xl font-black">{stores.filter(s=>s.owner_id===profile?.id).length}</h2><p className="mt-2 text-xs text-text-muted">پەسەندکراو: {stores.filter(s=>s.owner_id===profile?.id&&s.is_approved).length}</p></article>
+       <article className={panel}><p className="text-sm text-text-secondary">داواکارییەکان</p><h2 className="mt-2 text-xl font-black">{orders.length}</h2><p className="mt-2 text-xs text-text-muted">تۆمارکراو لە داتابەیس</p></article>
+      </div>
+      {profile?.requested_role!=="customer"&&profile?.approved_role==="customer"&&<div className="rounded-2xl border border-warning/30 bg-surface p-5"><h2 className="font-black">چاوەڕێی پەسەندکردنی ڕۆڵ</h2><p className="mt-2 text-sm leading-7 text-text-secondary">داواکاریی {roleLabel[profile.requested_role]} هێشتا پەسەند نەکراوە. هەتا ئەو کاتە دەسەڵاتی ئەو ڕۆڵەت نییە.</p></div>}
+      <div className={panel}><h2 className="text-lg font-black">خێرا بڕۆ بۆ</h2><div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{tabs.filter(x=>x.id!=="overview").map(x=><button key={x.id} onClick={()=>setTab(x.id)} className="flex items-center gap-3 rounded-xl border border-border p-4 text-right hover:border-primary hover:bg-secondary"><x.icon className="text-primary" size={20}/><span className="font-bold">{x.label}</span></button>)}</div></div>
+     </div>}
+     {tab==="profile"&&<div className={panel}><h2 className="text-xl font-black">زانیاری هەژمار</h2><p className="mt-1 text-sm leading-6 text-text-secondary">زانیاری بنەڕەتی نوێ بکەرەوە. ڕۆڵ و دەسەڵات لێرە ناگۆڕدرێت.</p><form onSubmit={saveProfile} className="mt-5 grid gap-4 sm:grid-cols-2"><label className="text-sm font-bold">ناوی تەواو<input required minLength={2} maxLength={100} value={editName} onChange={e=>setEditName(e.target.value)} className={field}/></label><label className="text-sm font-bold">ژمارەی مۆبایل<input type="tel" maxLength={30} value={editPhone} onChange={e=>setEditPhone(e.target.value)} className={field}/></label><div className="flex flex-wrap gap-2 sm:col-span-2"><button disabled={busy} className="rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50">{busy?"چاوەڕێ بکە...":"پاشەکەوتکردن"}</button><Link href="/reset-password" className="rounded-xl border border-border px-5 py-3 text-sm font-bold">گۆڕینی وشەی نهێنی</Link></div></form><div className="mt-6 rounded-xl bg-surface-muted p-4 text-sm leading-7"><p><b>ئیمەیڵ:</b> زانیاریی چوونەژوورەوە لە Supabase Auth بەڕێوەدەبرێت.</p><p><b>ڕۆڵی چالاک:</b> {roleLabel[profile?.approved_role||""]}</p><p><b>ڕۆڵی داواکراو:</b> {roleLabel[profile?.requested_role||""]}</p></div></div>}
+     {tab==="stores"&&isMerchant&&<div className="space-y-5"><div className={panel}><h2 className="text-xl font-black">دروستکردنی دوکان</h2><p className="mt-1 text-sm leading-6 text-text-secondary">دوکان سەرەتا دەبێت لەلایەن سوپەر ئەدمین پەسەند بکرێت.</p><form onSubmit={createStore} className="mt-4 grid gap-4 sm:grid-cols-2"><label className="text-sm font-bold">ناوی دوکان<input required minLength={2} maxLength={100} value={storeName} onChange={e=>setStoreName(e.target.value)} placeholder="بۆ نموونە: چێشتخانەی شاخ" className={field}/></label><label className="text-sm font-bold">جۆری دوکان<select value={storeCategory} onChange={e=>setStoreCategory(e.target.value)} className={field}><option value="restaurant">چێشتخانە</option><option value="grocery">سوپەرمارکێت</option><option value="produce">سەوزە و میوە</option></select></label><div className="sm:col-span-2"><button disabled={busy} className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50"><Plus size={18}/> تۆمارکردنی دوکان</button></div></form></div><div className={panel}><h2 className="text-lg font-black">دوکانەکانم</h2><div className="mt-4 space-y-3">{stores.filter(s=>s.owner_id===profile?.id).length===0?<p className="text-sm text-text-secondary">هێشتا دوکانێکت تۆمار نەکردووە.</p>:stores.filter(s=>s.owner_id===profile?.id).map(s=><div key={s.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-4"><div><b>{s.name}</b><p className="mt-1 text-sm text-text-secondary">{categoryLabel[s.category]||s.category}</p></div><span className={"rounded-full px-3 py-1 text-xs font-bold "+(s.is_approved?"bg-secondary text-primary":"bg-surface-muted text-text-secondary")}>{s.is_approved?"پەسەندکرا":"چاوەڕێی پەسەندکردن"}</span></div>)}</div></div></div>}
+     {tab==="products"&&isMerchant&&<div className="space-y-5"><div className={panel}><h2 className="text-xl font-black">زیادکردنی بەرهەم</h2><form onSubmit={createProduct} className="mt-4 grid gap-4 sm:grid-cols-2"><label className="text-sm font-bold sm:col-span-2">دوکان<select required value={productStore} onChange={e=>setProductStore(e.target.value)} className={field}><option value="">دوکان هەڵبژێرە</option>{stores.filter(s=>s.owner_id===profile?.id&&s.is_approved).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><p className="sm:col-span-2 -mt-2 text-xs text-text-muted">تەنها دوکانی پەسەندکراو دەتوانێت بەرهەمی بازاڕ زیاد بکات.</p><label className="text-sm font-bold">ناوی بەرهەم<input required minLength={2} maxLength={120} value={productName} onChange={e=>setProductName(e.target.value)} className={field}/></label><label className="text-sm font-bold">نرخ بە دینار<input required type="number" min="1" step="1" value={productPrice} onChange={e=>setProductPrice(e.target.value)} className={field}/></label><label className="text-sm font-bold">کۆمسیۆنی دوکان (د.ع)<input required type="number" min="0" step="1" value={productCommission} onChange={e=>setProductCommission(e.target.value)} className={field}/></label><label className="text-sm font-bold">پاداشتی هاوبەشکردن (د.ع)<input required type="number" min="0" step="1" value={productReward} onChange={e=>setProductReward(e.target.value)} className={field}/></label><label className="flex items-center gap-3 text-sm font-bold sm:col-span-2"><input type="checkbox" checked={rewardEnabled} onChange={e=>setRewardEnabled(e.target.checked)} className="h-4 w-4 accent-orange-600"/> پاداشتی هاوبەشکردن چالاک بێت</label><div className="sm:col-span-2"><button disabled={busy||!stores.some(s=>s.owner_id===profile?.id&&s.id===productStore&&s.is_approved)} className="rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50">زیادکردنی بەرهەم</button></div></form></div><div className={panel}><h2 className="text-lg font-black">بەرهەمەکانم ({products.length})</h2><div className="mt-4 space-y-3">{products.length===0?<p className="text-sm text-text-secondary">هێشتا بەرهەمێک زیاد نەکراوە.</p>:products.map(p=><article key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-4"><div><b>{p.name}</b><p className="mt-1 text-sm text-text-secondary">{money(p.price_iqd)} · کۆمسیۆن: {money(p.merchant_commission_iqd)}{p.share_reward_enabled?" · پاداشتی هاوبەشکردن: "+money(p.share_reward_iqd):""}</p></div><span className={"rounded-full px-3 py-1 text-xs font-bold "+(p.is_available?"bg-secondary text-primary":"bg-surface-muted text-text-muted")}>{p.is_available?"بەردەستە":"نا بەردەستە"}</span></article>)}</div></div></div>}
+     {tab==="wallet"&&isWorker&&<div className="space-y-5"><div className="grid gap-3 sm:grid-cols-2">{wallets.map(w=><article key={w.id} className={panel}><div className="flex items-center gap-2 text-sm text-text-secondary"><Wallet size={18}/> جزدانی {roleLabel[w.owner_type]||w.owner_type}</div><h2 className="mt-3 text-3xl font-black">{money(w.balance_iqd)}</h2><p className="mt-2 text-xs text-text-muted">باڵانس بە داتابەیسەوە پەیوەستە.</p></article>)}</div><div className={panel}><h2 className="text-xl font-black">داواکاریی زیادکردنی باڵانس</h2><p className="mt-1 text-sm leading-6 text-text-secondary">داواکاری بۆ سوپەر ئەدمین دەنێردرێت. باڵانس تەنها دوای پەسەندکردن زیاد دەکرێت.</p><form onSubmit={requestTopup} className="mt-4 grid gap-4 sm:grid-cols-2"><label className="text-sm font-bold">جزدان<select required value={topupWallet} onChange={e=>setTopupWallet(e.target.value)} className={field}>{wallets.filter(w=>["merchant","captain"].includes(w.owner_type)).map(w=><option key={w.id} value={w.id}>{roleLabel[w.owner_type]} · {money(w.balance_iqd)}</option>)}</select></label><label className="text-sm font-bold">بڕ بە دینار<input required type="number" min="1000" step="1" value={topupAmount} onChange={e=>setTopupAmount(e.target.value)} className={field}/></label><div className="sm:col-span-2"><button disabled={busy||!wallets.some(w=>["merchant","captain"].includes(w.owner_type))} className="rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50">ناردنی داواکاری</button></div></form></div><div className={panel}><h2 className="text-lg font-black">مێژووی داواکارییەکان</h2><div className="mt-4 space-y-3">{topups.length===0?<p className="text-sm text-text-secondary">هێشتا داواکارییەک نییە.</p>:topups.map(t=><div key={t.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-4"><div><b>{money(t.amount_iqd)}</b><p className="mt-1 text-xs text-text-muted">{new Date(t.created_at).toLocaleString("ckb")}</p></div><span className="rounded-full bg-surface-muted px-3 py-1 text-xs font-bold">{statusLabel[t.status]||t.status}</span></div>)}</div></div></div>}
+     {tab==="orders"&&<div className={panel}><h2 className="text-xl font-black">داواکارییەکان</h2><p className="mt-1 text-sm text-text-secondary">تەنها داواکارییە پەیوەندیدارەکان بە هەژمارەکەت پیشان دەدرێن.</p><div className="mt-4 space-y-3">{orders.length===0?<div className="rounded-xl bg-surface-muted p-5 text-sm leading-7 text-text-secondary">هێشتا داواکارییەک تۆمار نەکراوە. بەشی کڕین و تەواوکردنی داواکاری هێشتا لە قۆناغی جێبەجێکردندایە.</div>:orders.map(o=><article key={o.id} className="rounded-xl border border-border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><b>داواکاری #{o.id.slice(0,8)}</b><p className="mt-1 text-xs text-text-muted">{new Date(o.created_at).toLocaleString("ckb")}</p></div><span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold text-primary">{statusLabel[o.status]||o.status}</span></div><p className="mt-3 text-sm text-text-secondary">کۆی بەرهەم: {money(o.subtotal_iqd)} · گەیاندن: {money(o.delivery_fee_iqd)}</p></article>)}</div></div>}
+     {tab==="admin"&&isAdmin&&<div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-3"><article className={panel}><p className="text-sm text-text-secondary">داواکاریی ڕۆڵ</p><h2 className="mt-2 text-2xl font-black">{pendingRoles.length}</h2></article><article className={panel}><p className="text-sm text-text-secondary">داواکاریی جزدان</p><h2 className="mt-2 text-2xl font-black">{pendingTopups.length}</h2></article><article className={panel}><p className="text-sm text-text-secondary">دوکانی چاوەڕوان</p><h2 className="mt-2 text-2xl font-black">{pendingStores.length}</h2></article></div>
+      <div className={panel}><h2 className="text-lg font-black">پەسەندکردنی ڕۆڵ</h2><div className="mt-4 space-y-3">{pendingRoles.length===0?<p className="text-sm text-text-secondary">هیچ داواکارییەکی چاوەڕوان نییە.</p>:pendingRoles.map(p=><article key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-4"><div><b>{p.display_name||"بەکارهێنەر"}</b><p className="mt-1 text-sm text-text-secondary">{roleLabel[p.requested_role]||p.requested_role} · {p.phone||"ژمارەی مۆبایل نییە"}</p></div><div className="flex gap-2"><button disabled={!!busyId} onClick={()=>void reviewRole(p.id,true)} className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-white disabled:opacity-50">پەسەندکردن</button><button disabled={!!busyId} onClick={()=>void reviewRole(p.id,false)} className="rounded-lg border border-danger/30 px-3 py-2 text-sm font-bold text-danger disabled:opacity-50">ڕەتکردنەوە</button></div></article>)}</div></div>
+      <div className={panel}><h2 className="text-lg font-black">پەسەندکردنی دوکان</h2><div className="mt-4 space-y-3">{pendingStores.length===0?<p className="text-sm text-text-secondary">دوکانی چاوەڕوان نییە.</p>:pendingStores.map(s=><article key={s.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-4"><div><b>{s.name}</b><p className="mt-1 text-sm text-text-secondary">{categoryLabel[s.category]||s.category}</p></div><div className="flex gap-2"><button disabled={!!busyId} onClick={()=>void reviewStore(s.id,true)} className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-white">پەسەندکردن</button><button disabled={!!busyId} onClick={()=>void reviewStore(s.id,false)} className="rounded-lg border border-danger/30 px-3 py-2 text-sm font-bold text-danger">ڕەتکردنەوە</button></div></article>)}</div></div>
+      <div className={panel}><h2 className="text-lg font-black">داواکاریی زیادکردنی باڵانس</h2><div className="mt-4 space-y-3">{pendingTopups.length===0?<p className="text-sm text-text-secondary">داواکاریی جزدان نییە.</p>:pendingTopups.map(t=><article key={t.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-4"><div><b>{money(t.amount_iqd)}</b><p className="mt-1 text-xs text-text-muted">جۆر: {roleLabel[t.wallets?.owner_type||""]||t.wallets?.owner_type||"جزدان"} · {new Date(t.created_at).toLocaleString("ckb")}</p></div><div className="flex gap-2"><button disabled={!!busyId} onClick={()=>void reviewTopup(t.id,true)} className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-white">پەسەندکردن</button><button disabled={!!busyId} onClick={()=>void reviewTopup(t.id,false)} className="rounded-lg border border-danger/30 px-3 py-2 text-sm font-bold text-danger">ڕەتکردنەوە</button></div></article>)}</div></div>
+      <div className={panel}><h2 className="text-lg font-black">هەموو داواکارییەکان</h2><p className="mt-1 text-sm text-text-secondary">پیشاندانی تەنها؛ گۆڕینی دۆخی داواکاری هێشتا بە ڕێڕەوی تایبەتی سێرڤەر نەبەستراوە.</p><div className="mt-4 space-y-2">{orders.slice(0,10).map(o=><div key={o.id} className="flex flex-wrap justify-between gap-2 rounded-lg bg-surface-muted p-3 text-sm"><span>#{o.id.slice(0,8)} · {statusLabel[o.status]||o.status}</span><b>{money(o.subtotal_iqd+o.delivery_fee_iqd)}</b></div>)}</div></div>
+     </div>}
+    </section>
+   </div>
+   <footer className="mt-8 hidden border-t border-border py-5 text-center text-xs leading-6 text-text-muted md:block">شاخ دێلڤەری · بەڕێوەبردنی هەژمار و خزمەتگوزارییەکان</footer>
+  </div>
+  <nav aria-label="ناوبەری مۆبایل" className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 px-2 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-2 shadow-popover backdrop-blur lg:hidden"><div className="mx-auto grid max-w-xl grid-cols-4 gap-1">{[{label:"سەرەتا",href:"/",icon:Activity},{label:"داشبۆرد",href:"/dashboard",icon:LayoutDashboard},{label:"هەژمار",href:"/dashboard",icon:UserRound},{label:"بازاڕ",href:"/#products",icon:Store}].map((n,i)=><Link key={n.label} href={n.href} onClick={()=>{if(i===2)setTab("profile");}} className={"flex flex-col items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-bold "+(i===1?"bg-secondary text-primary":"text-text-secondary")}><n.icon size={19}/>{n.label}</Link>)}</div><p className="mt-1 text-center text-[9px] text-text-muted">شاخ · خزمەتگوزاریی مۆبایل</p></nav>
+ </main>;
 }
