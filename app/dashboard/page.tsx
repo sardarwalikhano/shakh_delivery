@@ -17,6 +17,9 @@ export default function DashboardPage() {
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const load = useCallback(async () => {
     const supabase = createSupabaseBrowserClient();
@@ -25,6 +28,8 @@ export default function DashboardPage() {
     const { data: me, error } = await supabase.from("profiles").select("id,display_name,phone,requested_role,approved_role,created_at").eq("id", user.id).single();
     if (error) { setMessage("نەتوانرا زانیاری هەژمار بخوێندرێتەوە. دڵنیابە migration و Supabase env ڕێکن."); setLoading(false); return; }
     setProfile(me as Profile);
+    setEditName(me.display_name ?? "");
+    setEditPhone(me.phone ?? "");
     const { data: walletData } = await supabase.from("wallets").select("id,owner_type,balance_iqd").eq("owner_id", user.id);
     setWallets((walletData ?? []) as Wallet[]);
     if (["admin","super_admin"].includes(me.approved_role)) {
@@ -36,6 +41,22 @@ export default function DashboardPage() {
   }, [router]);
 
   useEffect(() => { void load(); }, [load]);
+
+  async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSavingProfile(true); setMessage("");
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("تکایە دووبارە بچۆ ژوورەوە.");
+      const cleanName = editName.trim();
+      if (cleanName.length < 2) throw new Error("ناو دەبێت لانیکەم ٢ پیت بێت.");
+      const { error } = await supabase.from("profiles").update({ display_name: cleanName, phone: editPhone.trim() || null }).eq("id", user.id);
+      if (error) throw error;
+      setProfile(current => current ? { ...current, display_name: cleanName, phone: editPhone.trim() || null } : current);
+      setMessage("زانیاری هەژمارەکەت نوێ کرایەوە.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "نوێکردنەوەی زانیاری سەرکەوتوو نەبوو."); }
+    finally { setSavingProfile(false); }
+  }
 
   async function signOut() {
     const supabase = createSupabaseBrowserClient();
@@ -61,6 +82,7 @@ export default function DashboardPage() {
         <button onClick={signOut} className="rounded-xl border border-white/30 px-4 py-2 font-bold">دەرچوون</button>
       </header>
       {message && <p role="status" className="mt-4 rounded-xl bg-white p-4 text-sm leading-7 text-slate-700 shadow-sm">{message}</p>}
+      <section className="mt-6 rounded-2xl border bg-white p-5 sm:p-6"><h2 className="text-xl font-black">زانیاری هەژمار</h2><p className="mt-1 text-sm text-slate-500">ناو و ژمارەی مۆبایلەکەت لێرە نوێ بکەرەوە. ڕۆڵ و دەسەڵات لەم بەشەوە ناگۆڕدرێت.</p><form onSubmit={saveProfile} className="mt-4 grid gap-4 sm:grid-cols-2"><label className="block text-sm font-bold">ناوی تەواو<input required minLength={2} maxLength={100} value={editName} onChange={e=>setEditName(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-green-700"/></label><label className="block text-sm font-bold">ژمارەی مۆبایل<input type="tel" maxLength={30} value={editPhone} onChange={e=>setEditPhone(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-green-700"/></label><div className="flex flex-wrap items-center gap-3 sm:col-span-2"><button disabled={savingProfile} className="rounded-xl bg-green-700 px-5 py-3 font-bold text-white disabled:opacity-50">{savingProfile?"چاوەڕێ بکە...":"پاشەکەوتکردنی گۆڕانکاری"}</button><Link href="/reset-password" className="rounded-xl border px-5 py-3 text-sm font-bold text-green-800">گۆڕینی وشەی نهێنی</Link></div></form></section>
       <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <article className="rounded-2xl border bg-white p-5"><p className="text-sm text-slate-500">دۆخی هەژمار</p><h2 className="mt-2 text-xl font-black">{roleLabel[profile?.approved_role ?? ""]}</h2><p className="mt-2 text-sm text-slate-500">ڕۆڵی داواکراو: {roleLabel[profile?.requested_role ?? ""]}</p></article>
         {wallets.map(w=><article key={w.id} className="rounded-2xl border bg-white p-5"><p className="text-sm text-slate-500">جزدان · {roleLabel[w.owner_type] ?? w.owner_type}</p><h2 className="mt-2 text-2xl font-black">{Number(w.balance_iqd).toLocaleString("en-US")} د.ع</h2><p className="mt-2 text-sm text-slate-500">بڕی جزدان بە داتابەیسەوە پەیوەستە.</p></article>)}
