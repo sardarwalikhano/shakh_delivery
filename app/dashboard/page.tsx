@@ -82,6 +82,11 @@ export default function DashboardPage(){
    admin?supabase.from("stores").select("id,owner_id,name,category,is_approved,review_status,created_at").eq("review_status","pending").order("created_at",{ascending:true}):Promise.resolve({data:[],error:null}),
    p.approved_role==="captain"?supabase.from("orders").select("id,customer_id,store_id,captain_id,status,subtotal_iqd,delivery_fee_iqd,delivery_address,created_at").eq("status","pending").is("captain_id",null).order("created_at",{ascending:true}).limit(50):Promise.resolve({data:[],error:null})
   ]);
+  const queryErrors=[w.error,s.error,t.error,o.error,rr.error,ps.error,av.error].filter(Boolean);
+  if(queryErrors.length){
+   console.error("Dashboard data query errors",queryErrors);
+   setMessage(`هۆشداری: ${queryErrors.length} داواکاریی داتابەیس نەخوێندرایەوە. نوێکردنەوە بکە یان پۆلیسی دەستگەیشتن بپشکنە.`);
+  }
   setWallets((w.data||[]) as WalletRow[]);setStores((s.data||[]) as StoreRow[]);setTopups((t.data||[]) as unknown as TopupRow[]);setOrders((o.data||[]) as OrderRow[]);setAvailableOrders((av.data||[]) as OrderRow[]);setPendingRoles((rr.data||[]) as Profile[]);setPendingStores((ps.data||[]) as StoreRow[]);
   const storeIds=((s.data||[]) as StoreRow[]).filter(x=>x.owner_id===user.id).map(x=>x.id);
   if(admin){const {data:all}=await supabase.from("products").select("id,store_id,name,price_iqd,share_reward_iqd,merchant_commission_iqd,share_reward_enabled,is_available").order("name");setProducts((all||[]) as ProductRow[]);}
