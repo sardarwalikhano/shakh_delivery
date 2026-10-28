@@ -47,15 +47,15 @@ export default function ResetPasswordPage() {
     } finally { setBusy(false); }
   }
 
-  return <main dir="rtl" className="min-h-screen bg-[#f8faf7] px-4 py-12">
-    <section className="mx-auto max-w-md rounded-3xl border bg-white p-7 shadow-sm sm:p-10">
-      <Link href="/login" className="text-sm font-bold text-green-800">گەڕانەوە بۆ چوونەژوورەوە</Link>
+  return <main dir="rtl" className="min-h-screen bg-background px-4 py-12">
+    <section className="mx-auto max-w-md rounded-3xl border bg-surface p-7 shadow-sm sm:p-10">
+      <Link href="/login" className="text-sm font-bold text-primary">گەڕانەوە بۆ چوونەژوورەوە</Link>
       <h1 className="mt-7 text-2xl font-black">گۆڕینی وشەی نهێنی</h1>
-      <p className="mt-2 text-sm leading-7 text-slate-500">وشەی نهێنییەکی نوێ و بەهێز هەڵبژێرە.</p>
+      <p className="mt-2 text-sm leading-7 text-text-secondary">وشەی نهێنییەکی نوێ و بەهێز هەڵبژێرە.</p>
       <form onSubmit={submit} className="mt-6 space-y-4">
-        <label className="block text-sm font-bold">وشەی نهێنی نوێ<input required minLength={8} autoComplete="new-password" type="password" value={password} onChange={e=>setPassword(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-green-700"/></label>
-        <label className="block text-sm font-bold">دووبارە وشەی نهێنی بنووسە<input required minLength={8} autoComplete="new-password" type="password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-green-700"/></label>
-        <button disabled={!ready || busy || !!message.startsWith("بەستەری گۆڕینی")} className="w-full rounded-xl bg-green-700 px-5 py-3 font-bold text-white disabled:opacity-50">{busy?"چاوەڕێ بکە...":"پاشەکەوتکردنی وشەی نهێنی"}</button>
+        <label className="block text-sm font-bold">وشەی نهێنی نوێ<input required minLength={8} autoComplete="new-password" type="password" value={password} onChange={e=>setPassword(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-primary"/></label>
+        <label className="block text-sm font-bold">دووبارە وشەی نهێنی بنووسە<input required minLength={8} autoComplete="new-password" type="password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} className="mt-2 w-full rounded-xl border px-4 py-3 font-normal outline-none focus:border-primary"/></label>
+        <button disabled={!ready || busy || !!message.startsWith("بەستەری گۆڕینی")} className="w-full rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50">{busy?"چاوەڕێ بکە...":"پاشەکەوتکردنی وشەی نهێنی"}</button>
         {message && <p role="status" className="rounded-xl bg-slate-50 p-3 text-sm leading-7 text-slate-700">{message}</p>}
       </form>
     </section>
