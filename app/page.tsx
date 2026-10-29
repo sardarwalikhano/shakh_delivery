@@ -15,6 +15,7 @@ export default function Home() {
   const [category,setCategory]=useState<Category>("all");
   const [products,setProducts]=useState<Product[]>([]);
   const [cart,setCart]=useState<Record<string,number>>({});
+  const [cartReady,setCartReady]=useState(false);
   const [customerName,setCustomerName]=useState("");
   const [customerPhone,setCustomerPhone]=useState("");
   const [lastReceipt,setLastReceipt]=useState<{orderId:string;customerName:string;customerPhone:string;deliveryAddress:string;items:{name:string;quantity:number;unitPrice:number}[];subtotal:number;deliveryFee:number;total:number;createdAt:string}|null>(null);
@@ -55,10 +56,12 @@ export default function Home() {
         if(Array.isArray(parsed)&&parsed.every((id)=>typeof id==="string")) setCart(Object.fromEntries(parsed.map((id)=>[id,1]))); else if(parsed&&typeof parsed==="object"&&!Array.isArray(parsed)&&Object.values(parsed).every((q)=>Number.isSafeInteger(q)&&Number(q)>0)) setCart(parsed as Record<string,number>);
       }
     } catch { window.sessionStorage.removeItem("shakh_cart_v1"); }
+    finally { setCartReady(true); }
   },[]);
   useEffect(()=>{
+    if(!cartReady)return;
     try { window.sessionStorage.setItem("shakh_cart_v1",JSON.stringify(cart)); } catch { /* storage may be unavailable */ }
-  },[cart]);
+  },[cart,cartReady]);
   const filtered=useMemo(()=>products.filter(p=>(p.name+" "+p.stores.name).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())&&(category==="all"||p.stores.category===category)),[products,search,category]);
   const selected=products.filter(p=>(cart[p.id]??0)>0);
   const cartCount=Object.values(cart).reduce((sum,q)=>sum+q,0);
