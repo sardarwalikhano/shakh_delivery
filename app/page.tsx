@@ -34,6 +34,18 @@ export default function Home() {
     finally { setLoading(false); }
   }
   useEffect(()=>{void loadProducts();},[]);
+  useEffect(()=>{
+    try {
+      const saved=window.sessionStorage.getItem("shakh_cart_v1");
+      if(saved){
+        const parsed:unknown=JSON.parse(saved);
+        if(Array.isArray(parsed)&&parsed.every((id)=>typeof id==="string")) setCart(parsed);
+      }
+    } catch { window.sessionStorage.removeItem("shakh_cart_v1"); }
+  },[]);
+  useEffect(()=>{
+    try { window.sessionStorage.setItem("shakh_cart_v1",JSON.stringify(cart)); } catch { /* storage may be unavailable */ }
+  },[cart]);
   const filtered=useMemo(()=>products.filter(p=>(p.name+" "+p.stores.name).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())&&(category==="all"||p.stores.category===category)),[products,search,category]);
   const selected=products.filter(p=>cart.includes(p.id));
   const total=selected.reduce((sum,p)=>sum+Number(p.price_iqd),0);
