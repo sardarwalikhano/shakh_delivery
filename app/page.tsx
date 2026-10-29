@@ -20,6 +20,14 @@ export default function Home() {
   const [notice,setNotice]=useState("");
   const [deliveryAddress,setDeliveryAddress]=useState("");
   const [checkoutBusy,setCheckoutBusy]=useState(false);
+  const [signedIn,setSignedIn]=useState(false);
+
+  useEffect(()=>{
+    const supabase=createSupabaseBrowserClient();
+    void supabase.auth.getUser().then(({data})=>setSignedIn(!!data.user));
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>setSignedIn(!!session?.user));
+    return ()=>subscription.unsubscribe();
+  },[]);
 
   async function loadProducts() {
     setLoading(true); setError("");
@@ -57,7 +65,7 @@ export default function Home() {
     <header className="sticky top-0 z-20 border-b border-border bg-surface/95 backdrop-blur"><div className="mx-auto flex max-w-content flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
       <Link href="/" aria-label="شاخ، سەرەتا" className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-2xl font-black text-primary-foreground">ش</span><span><b className="block text-xl font-black text-primary">شاخ</b><small className="text-xs text-text-muted">SHAKH DELIVERY</small></span></Link>
       <label className="order-3 flex w-full items-center gap-2 rounded-control border border-border bg-surface-muted px-3 py-2.5 sm:order-none sm:ml-auto sm:w-auto sm:min-w-64 sm:max-w-md sm:flex-1"><Search size={18} className="text-text-muted"/><input aria-label="گەڕان لە بەرهەم و دوکان" value={search} onChange={e=>setSearch(e.target.value)} placeholder="گەڕان لە بەرهەم و دوکان..." className="w-full bg-transparent text-sm outline-none"/></label>
-      <nav aria-label="ناوبەری سەرەکی" className="mr-auto flex gap-2"><Link href="/login" className="rounded-control border border-border px-3 py-2 text-sm font-bold hover:bg-surface-muted">چوونەژوورەوە</Link><Link href="/signup" className="rounded-control bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary-hover">هەژمار دروست بکە</Link></nav>
+      <nav aria-label="ناوبەری سەرەکی" className="mr-auto flex gap-2">{signedIn?<Link href="/dashboard" className="rounded-control bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary-hover"><LayoutDashboard size={15} className="ml-1 inline"/> داشبۆرد</Link>:<><Link href="/login" className="rounded-control border border-border px-3 py-2 text-sm font-bold hover:bg-surface-muted">چوونەژوورەوە</Link><Link href="/signup" className="rounded-control bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary-hover">هەژمار دروست بکە</Link></>}</nav>
     </div></header>
 
     <section className="mx-auto grid max-w-content gap-8 px-4 py-10 sm:px-6 md:grid-cols-2 md:items-center md:py-14">
