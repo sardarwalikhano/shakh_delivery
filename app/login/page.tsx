@@ -16,13 +16,21 @@ export default function LoginPage() {
   const [resetBusy, setResetBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
 
+  function postLoginPath() {
+    try {
+      const saved = window.sessionStorage.getItem("shakh_cart_v1");
+      const cart: unknown = saved ? JSON.parse(saved) : [];
+      return Array.isArray(cart) && cart.length > 0 ? "/" : "/dashboard";
+    } catch { return "/dashboard"; }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setMessage("");
     try {
       const supabase = createSupabaseBrowserClient();
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) throw error;
-      router.push("/dashboard"); router.refresh();
+      router.push(postLoginPath()); router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "چوونەژوورەوە سەرکەوتوو نەبوو.");
     } finally { setBusy(false); }
@@ -32,7 +40,7 @@ export default function LoginPage() {
     setGoogleBusy(true); setMessage("");
     try {
       const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/dashboard` } });
+      const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}${postLoginPath()}` } });
       if (error) throw error;
     } catch (error) { setMessage(error instanceof Error ? error.message : "چوونەژوورەوە بە گووگڵ سەرکەوتوو نەبوو."); setGoogleBusy(false); }
   }
