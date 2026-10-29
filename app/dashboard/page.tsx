@@ -89,9 +89,15 @@ export default function DashboardPage(){
   }
   setWallets((w.data||[]) as WalletRow[]);setStores((s.data||[]) as StoreRow[]);setTopups((t.data||[]) as unknown as TopupRow[]);setOrders((o.data||[]) as OrderRow[]);setAvailableOrders((av.data||[]) as OrderRow[]);setPendingRoles((rr.data||[]) as Profile[]);setPendingStores((ps.data||[]) as StoreRow[]);
   const storeIds=((s.data||[]) as StoreRow[]).filter(x=>x.owner_id===user.id).map(x=>x.id);
-  if(admin){const {data:all}=await supabase.from("products").select("id,store_id,name,price_iqd,share_reward_iqd,merchant_commission_iqd,share_reward_enabled,is_available").order("name");setProducts((all||[]) as ProductRow[]);}
-  else if(storeIds.length){const {data:owned}=await supabase.from("products").select("id,store_id,name,price_iqd,share_reward_iqd,merchant_commission_iqd,share_reward_enabled,is_available").in("store_id",storeIds).order("name");setProducts((owned||[]) as ProductRow[]);}
-  else setProducts([]);
+  if(admin){
+   const {data:all,error:productError}=await supabase.from("products").select("id,store_id,name,price_iqd,share_reward_iqd,merchant_commission_iqd,share_reward_enabled,is_available").order("name");
+   if(productError){console.error("Dashboard products query error",productError);setMessage(current=>current||"نەتوانرا بەرهەمەکان بخوێندرێنەوە. پۆلیسی دەستگەیشتن بپشکنە.");}
+   setProducts((all||[]) as ProductRow[]);
+  } else if(storeIds.length){
+   const {data:owned,error:productError}=await supabase.from("products").select("id,store_id,name,price_iqd,share_reward_iqd,merchant_commission_iqd,share_reward_enabled,is_available").in("store_id",storeIds).order("name");
+   if(productError){console.error("Dashboard merchant products query error",productError);setMessage(current=>current||"نەتوانرا بەرهەمەکانی دوکان بخوێندرێنەوە.");}
+   setProducts((owned||[]) as ProductRow[]);
+  } else setProducts([]);
   setProductStore(current=>current||storeIds[0]||"");
   setTopupWallet(current=>current||((w.data||[]) as WalletRow[])[0]?.id||"");
   setLoading(false);
