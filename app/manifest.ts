@@ -16,7 +16,7 @@ export default function manifest(): MetadataRoute.Manifest {
     dir: "rtl",
     categories: ["food", "shopping"],
     icons: [
-      { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }
+      { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }
     ]
   };
 }
